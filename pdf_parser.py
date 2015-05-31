@@ -1,56 +1,30 @@
-from pdfminer.pdfparser import PDFParser
-from pdfminer.pdfdocument import PDFDocument
-from pdfminer.pdfpage import PDFPage
-from pdfminer.pdfpage import PDFTextExtractionNotAllowed
-from pdfminer.pdfinterp import PDFResourceManager
-from pdfminer.pdfinterp import PDFPageInterpreter
-from pdfminer.pdfdevice import PDFDevice
-from pdfminer.converter import PDFPageAggregator
-from pdfminer.pdftypes import PDFStream, PDFObjRef, resolve1, stream_value
-from pdfminer.layout import LAParams, LTChar, LTTextBox, LTTextLine, LTFigure, LTTextBoxHorizontal, LTLine 
-from dateutil.parser import *
-import sys
 import re
-import xml.etree.ElementTree as ET
-import unicodedata
+import sys
 import calendar
 import inflect
-from HTMLParser import HTMLParser
-
+import unicodedata
+import xml.etree.ElementTree as ET
+from dateutil.parser import *
+from pdfminer.pdfparser import PDFParser
+from pdfminer.pdfdocument import PDFDocument
+from pdfminer.pdfpage import PDFPage,PDFTextExtractionNotAllowed
+from pdfminer.pdfinterp import PDFResourceManager,PDFPageInterpreter
+from pdfminer.pdfdevice import PDFDevice
+from pdfminer.converter import PDFPageAggregator
+from pdfminer.layout import LAParams, LTChar, LTFigure 
 
 def parse_layout(layout):
-        #"""Function to recursively parse the layout tree."""
+        #"""Function to parse the layout tree."""
         for lt_obj in layout:
-                #print lt_obj.text, 
-                #print lt_obj
-##                x0 = lt_obj.bbox[0]
-##                print 'x0:' + x0
-##                x1 = lt_obj.bbox[2]
-##                print 'x1:' + x1
-##                #print(lt_obj.__class__.__name__)
-                #print(lt_obj.bbox)
-                #print lt_obj.get_text() 
                 if isinstance(lt_obj, LTFigure):
-                        #print(lt_obj.__class__.__name__)
-                        #parse_layout(lt_obj)  # Recursive
                         populate_lines(lt_obj)
-##                elif isinstance(lt_obj,LTLine):
-##                        line_count=line_count+1
-##                        break
-##                elif isinstance(lt_obj, LTChar):
-##                        (a,b,c,d,e,f) = lt_obj.matrix
-##                        print f
-                
-        #print text, line_count
 
 def populate_lines(text_container):
-        
         curr_y = 0
         for lt_obj in text_container:
-                
                 if isinstance(lt_obj,LTChar):
                         (a,b,c,d,e,f) = lt_obj.matrix
-                        #print f, curr_y, lt_obj.get_text()
+                        
                         if f != curr_y:
                                 if abs(f-curr_y) < 10:#Handling superscript th
                                         lines[len(lines)-1] = lines[len(lines)-1] + lt_obj.get_text()
@@ -83,19 +57,17 @@ def parse_pdf(file_name):
     interpreter = PDFPageInterpreter(rsrcmgr, device)
 
     for page in PDFPage.create_pages(document):
-            if page.pageid == 3 or page.pageid==5 or page.pageid!=0:
-                    #print (page.pageid - 1)/2
-                    interpreter.process_page(page)
-                    layout = device.get_result()
-                    parse_layout(layout)
-    
+            #if page.pageid == 3 or page.pageid==5 or page.pageid!=0:
+            interpreter.process_page(page)
+            layout = device.get_result()
+            parse_layout(layout)
+
 
 def addCoram(case,judgeText,positionText):
         judge = ET.Element('Judge')
         judge.text= judgeText
         if positionText == "":
                 positionText = "NA"
-                
         judge.set('Position',positionText)
         if case.find('CoramGroup') is None:
                 CoramGroup = ET.Element('CoramGroup')
@@ -123,6 +95,7 @@ def addCourtName(case,name):
         court.append(courtname)
         case.append(court)
         return case
+
 def getPetitioner(versus_found_at,lines):
         p= inflect.engine()
         i = versus_found_at - 1
@@ -169,17 +142,13 @@ def getRespondents(versus_found_at,lines):
                                 respondent['party_name']=respondents_text[:respondents_text.find("...")]
                                 respondent['respondent_type'] = respondent_type
                                 respondents_list.append(respondent)
-                                #addRespondent(case,respondents_text[:respondents_text.find("...")],respondent_type)
                         else:
-                                #pattern_respondents_multiple = re.compile(r'\d{1}[\]{1}].+[.]',re.I)
                                 match_list = re.finditer(r'\d{1}\]{1}([^.]+)[.]',respondents_text,re.I)
-                                #print len(list_respondents)
                                 for match in match_list:
                                         respondent={}
                                         respondent['party_name']=match.group(1)
                                         respondent['respondent_type'] = respondent_type
                                         respondents_list.append(respondent)
-                                        #case = addRespondent(case,match.group(1),respondent_type)
                         counsel_found_at = i+1
                         break
                 respondents_text =  respondents_text + lines[i]
@@ -191,7 +160,7 @@ def addPetitioner(tree,party_name, petitioner_type):
         petitioner = ET.Element('Petitioner')
         case = tree.getroot()
         if case is None:
-                print "hihihi"
+                print "No Root Found"
         
         petitioner.text= party_name
         petitioner.set('Type',petitioner_type)
@@ -207,7 +176,7 @@ def addPetitioner(tree,party_name, petitioner_type):
                                 case.append(PartiesGroup)
                         else:
                                 tree.find('.//PartiesGroup').append(parties)
-                                #case.append(PartiesGroup)
+                                
                 else:
                         tree.find('.//Parties').append(PetitionerGroup)
         else:
@@ -217,10 +186,7 @@ def addRespondent(tree,party_name, respondent_type):
         respondent = ET.Element('Respondent')
         case = tree.getroot()
         if case is None:
-                print "hihihi"
-        #ET.dump(case)
-        #parser = HTMLParser()
-        #party_name = parser.unescape(party_name)
+                print "No Root Found"
         respondent.text= party_name
         respondent.set('Type',respondent_type)
         if tree.find('.//RespondentGroup') is None:
@@ -235,7 +201,6 @@ def addRespondent(tree,party_name, respondent_type):
                                 case.append(PartiesGroup)
                         else:
                                 tree.find('.//PartiesGroup').append(parties)
-                                #case.append(PartiesGroup)
                 else:
                         tree.find('.//Parties').append(RespondentGroup)
         else:
@@ -295,9 +260,6 @@ def getCounselGroup(index,lines):
                                                         break
 
                                                 for_petitioners.append(match_obj.group(1))
-                                        
-                                        
-                                
                 elif re.search('[a-z\s]*',lines[i],re.I) is not None and petitioner_done == 1 and respondent_done != 1:
                         for_respondent_text+=lines[i]
                         for_respondent_match = re.search(for_respondent_pattern,for_respondent_text)
@@ -307,17 +269,14 @@ def getCounselGroup(index,lines):
                                 respondent_split_items =  re.split(r'along with|a/w[.]',respondent_line)
                                 for item in respondent_split_items:
                                         for_respondents.append(re.search(r'^[.\s]{0,}([.a-z\s]+)[,]',item,re.I).group(1))
-                                        
-                                                
                 i=i+1
+                
         counsel_group={}
         counsel_group['for_petitioners'] = for_petitioners
         counsel_group['for_respondents'] = for_respondents                
 
         return counsel_group
                 
-
-
 def getActElement(title):
         Act = ET.Element('Act')
         Title = ET.Element('Title')
@@ -334,10 +293,8 @@ def getActElement(title):
         Title.set("id",id)
         Act.append(Title)
         return Act
+
 def addSecRef(tree,section):
-        case = tree.getroot()
-        if case is None:
-                print "No Root Found"
         
         Title = ET.Element('Title')
         id= tree.find('.//Act/Title').attrib['id'] + "-" +section
@@ -351,6 +308,15 @@ def addSecRef(tree,section):
                 tree.find('.//SecRef').append(Title)
 
         return tree
+
+def addCitation(tree,citation):
+    
+        Title = ET.Element('Title')
+        Title.text = citation.strip()
+        Cite = ET.Element('Cite')
+        Cite.append(Title)
+        tree.find('.//Para').append(Cite)
+        return tree
         
 def addJudgmentGroup(tree, section_starts_at, lines):
         
@@ -361,21 +327,19 @@ def addJudgmentGroup(tree, section_starts_at, lines):
         
         JudgmentGroup = ET.Element('JudgmentGroup')
         JudgmentGroup.set('Title',judgment_group_title)
-        
-
         Para = ET.Element('Para')
-
-        #section_text_content=''
         i=section_starts_at
         section_set = set()
         section_list=[]
+        citations_set = set()
+        citations_list=[]
         while i < len(lines):
                 act_match = re.search(r'(Act,)',lines[i])
                 section_match = re.search(r'(Section[s]?)',lines[i])
+                versus_match = re.search(r'(vs.)',lines[i],re.I)
 
                 if act_match is not None:
                         act_line = lines[i-1]+lines[i]+lines[i+1]
-                        #print act_line
                         act_match_iter = re.finditer(r'([A-Z][a-z]+\s+[&]?\s?(and)?\s?){1,}(Act,)\s+\d{4}',act_line)
                         for full_act_match in list(act_match_iter):
                                 if full_act_match is not None:
@@ -390,99 +354,104 @@ def addJudgmentGroup(tree, section_starts_at, lines):
                                                 sum += 1
                                         
                                 if sum == 1 or sum == 3:
-                                        print section_line[section_line.find(section_match):section_line.find(section_match)+len(section_match)+3].split(" ",1)[1].replace(" ","").replace(",","")
                                         section_list.append(section_line[section_line.find(section_match):section_line.find(section_match)+len(section_match)+3].split(" ",1)[1].replace(" ","").replace(",",""))
                                         
                                 else:
-                                        print section_match.split(" ",1)[1].replace(" ","").replace(",","")
                                         section_list.append(section_match.split(" ",1)[1].replace(" ","").replace(",",""))
-                        #sections_matches = re.findall(r'Sections\s+\d+\s+[()\d\s]{0,}',section_line)
-                        #print section_line + "\n"
-                        
+                if versus_match is not None:
+                        versus_line = lines[i-1]+lines[i]+lines[i+1]
+                        versus_match_iter = re.finditer(r'(\(?[A-Z][a-z.,]+\)?\s+[&]?\s?(and)?\s?){1,}(vs.|Vs.)\s+(\(?[A-Z][a-z.,]+\)?\s+[&]?\s?(and)?\s?){1,}',versus_line)
+                        for versus_full_match in list(versus_match_iter):
+                                if versus_full_match is not None:
+                                        citations_list.append(versus_full_match.group(0))
+                        #print versus_line + "\n"
+                
                 i+=1
 
         section_set.update(section_list)
-        #for section in section_set:
-                
-        print section_set
-
-        #print section_text_content
+        citations_set.update(citations_list)
         JudgmentGroup.append(Para)
         case.append(JudgmentGroup)
         tree._setroot(case)
         for section in section_set:
                 if section is not "":
                         tree = addSecRef(tree,section)
-                        
-                
+        for citation in citations_set:
+                if citation is not "":
+                        tree = addCitation(tree,citation)
+        
+
         return tree
         
+if __name__ == '__main__':
         
-for arg in sys.argv[1:]:
-        lines = []
-        parse_pdf(arg)
-        coram_found_at=0
-        coram_found=0
-        court_name_found=0
-        counsel_found_at=0
-        versus_found=0
-        XMLTree = ET.ElementTree()
-        case = ET.Element('case')
-        XMLTree._setroot(case)
-        pattern_court_name = re.compile(r'\s{0,}in\s{0,}the\s{0,}high\s{0,}court\s{0,}of\s{0,}judicature\s{0,}(\S+)\s{0,}([a-zA-Z]*)\s{0,}', re.IGNORECASE)
-        pattern_coram = re.compile(r'coram\s{0,}:\s{0,}([a-zA-Z.\s]*)[,]?([\sJ.]*)', re.IGNORECASE)
-        pattern_coram_next = re.compile(r'\s{0,}&\s{0,}([a-zA-Z.\s]*)[,]?([\sJ.]*)', re.IGNORECASE)
-        pattern_versus = re.compile(r'\s{0,}v[ersu]{0,4}s[.]?\s{0,}', re.IGNORECASE)
+        for arg in sys.argv[1:]:
+                lines = []
+                parse_pdf(arg)
+                coram_found_at=0
+                coram_found=0
+                court_name_found=0
+                counsel_found_at=0
+                versus_found=0
+                XMLTree = ET.ElementTree()
+                case = ET.Element('case')
+                XMLTree._setroot(case)
+                pattern_court_name = re.compile(r'\s{0,}in\s{0,}the\s{0,}high\s{0,}court\s{0,}of\s{0,}judicature\s{0,}(\S+)\s{0,}([a-zA-Z]*)\s{0,}', re.IGNORECASE)
+                pattern_coram = re.compile(r'coram\s{0,}:\s{0,}([a-zA-Z.\s]*)[,]?([\sJ.]*)', re.IGNORECASE)
+                pattern_coram_next = re.compile(r'\s{0,}&\s{0,}([a-zA-Z.\s]*)[,]?([\sJ.]*)', re.IGNORECASE)
+                pattern_versus = re.compile(r'\s{0,}v[ersu]{0,4}s[.]?\s{0,}', re.IGNORECASE)
 
-        for index, line in enumerate(lines):
-                if not court_name_found:
-                        court_name_match = pattern_court_name.search(line)
-                        if court_name_match is not None:
-                                court_name_found = 1
-                                case = addCourtName(case,court_name_match.group(2).title())
-                if not versus_found:                
-                        versus_match = pattern_versus.search(line)
-                        if versus_match is not None and index < 15:#it could match other versi in the text
-                                versus_found = 1
-                                petitioner = getPetitioner(index, lines)
-                                XMLTree = addPetitioner(XMLTree,petitioner['party_name'], petitioner['petitioner_type'])
-                                respondents_list,counsel_found_at = getRespondents(index, lines)
-                                for respondent in respondents_list:
-                                        XMLTree = addRespondent(XMLTree,respondent['party_name'], respondent['respondent_type'])
-                if counsel_found_at != 0 and index == counsel_found_at:
-                        counsel_group = getCounselGroup(index,lines)
-                        XMLTree = addCounselGroup(XMLTree,counsel_group)
+                for index, line in enumerate(lines):
+                        if not court_name_found:
+                                court_name_match = pattern_court_name.search(line)
+                                if court_name_match is not None:
+                                        court_name_found = 1
+                                        case = addCourtName(case,court_name_match.group(2).title())
+                        if not versus_found:                
+                                versus_match = pattern_versus.search(line)
+                                if versus_match is not None and index < 15:#it could match other versi in the text
+                                        versus_found = 1
+                                        petitioner = getPetitioner(index, lines)
+                                        XMLTree = addPetitioner(XMLTree,petitioner['party_name'], petitioner['petitioner_type'])
+                                        respondents_list,counsel_found_at = getRespondents(index, lines)
+                                        for respondent in respondents_list:
+                                                XMLTree = addRespondent(XMLTree,respondent['party_name'], respondent['respondent_type'])
+                        if counsel_found_at != 0 and index == counsel_found_at:
+                                counsel_group = getCounselGroup(index,lines)
+                                XMLTree = addCounselGroup(XMLTree,counsel_group)
+                                
+                        coram_match = pattern_coram.search(line)
+                        if coram_match is not None:
+                                #print line
+                                judge = coram_match.group(1)
+                                position = coram_match.group(2)
+                                #print position
+                                coram_found=1
+                                coram_found_at = index
+                                #print line, index
+                                case = addCoram(case,judge.strip(),position.strip())
+                                
+                        elif coram_found==1 and index == (coram_found_at+1):
+                                if '&' in line:
+                                        coram_next_match = pattern_coram_next.search(line)
+                                        if coram_next_match is not None:
+                                                coram_found_at = index
+                                                judge = coram_next_match.group(1)
+                                                position = coram_next_match.group(2)
+                                                case = addCoram(case,judge.strip(),position.strip())
+                                                
+                        if coram_found==1 and index == (coram_found_at + 1):
+                                date = parse(line.split(":")[1])
+                                case = addDate(case, calendar.month_name[date.month],date.day,date.year,"Reserved")
+                                
+                        elif coram_found==1 and index == (coram_found_at + 2):
+                                date = parse(line.split(":")[1])
+                                case = addDate(case, calendar.month_name[date.month],date.day,date.year,"Pronounced")
+                        if coram_found==1 and index == (coram_found_at + 3):
+                                XMLTree = addJudgmentGroup(XMLTree, index, lines)
+                                
                         
-                coram_match = pattern_coram.search(line)
-                if coram_match is not None:
-                        #print line
-                        judge = coram_match.group(1)
-                        position = coram_match.group(2)
-                        #print position
-                        coram_found=1
-                        coram_found_at = index
-                        #print line, index
-                        case = addCoram(case,judge.strip(),position.strip())
-                        
-                elif coram_found==1 and index == (coram_found_at+1):
-                        if '&' in line:
-                                coram_next_match = pattern_coram_next.search(line)
-                                if coram_next_match is not None:
-                                        coram_found_at = index
-                                        judge = coram_next_match.group(1)
-                                        position = coram_next_match.group(2)
-                                        case = addCoram(case,judge.strip(),position.strip())
-                                        
-                if coram_found==1 and index == (coram_found_at + 1):
-                        date = parse(line.split(":")[1])
-                        case = addDate(case, calendar.month_name[date.month],date.day,date.year,"Reserved")
-                        
-                elif coram_found==1 and index == (coram_found_at + 2):
-                        date = parse(line.split(":")[1])
-                        case = addDate(case, calendar.month_name[date.month],date.day,date.year,"Pronounced")
-                if coram_found==1 and index == (coram_found_at + 3):
-                        XMLTree = addJudgmentGroup(XMLTree, index, lines)
-                        
-                
-        #ET.dump(case)
-        XMLTree.write("XMLOutput - "+arg[:arg.find(".pdf")]+".xml")
+                XMLTree.write("XMLOutput - "+arg[:arg.find(".pdf")]+".xml")
+
+        
+  
