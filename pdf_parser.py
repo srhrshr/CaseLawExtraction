@@ -83,7 +83,7 @@ def parse_pdf(file_name):
     interpreter = PDFPageInterpreter(rsrcmgr, device)
 
     for page in PDFPage.create_pages(document):
-            if page.pageid == 3 or page.pageid==5:
+            if page.pageid == 3 or page.pageid==5 or page.pageid!=0:
                     #print (page.pageid - 1)/2
                     interpreter.process_page(page)
                     layout = device.get_result()
@@ -316,7 +316,108 @@ def getCounselGroup(index,lines):
 
         return counsel_group
                 
+
+
+def getActElement(title):
+        Act = ET.Element('Act')
+        Title = ET.Element('Title')
+        id=""
+        for word in title.split(" "):
+                if word != "and" and word != "&":
+                        if word.isdigit():
+                                id = id + "-"
+                                id = id + str(word)
+                        else:
+                                id = id + word[:1]
+        
+        Title.text = title
+        Title.set("id",id)
+        Act.append(Title)
+        return Act
+def addSecRef(tree,section):
+        case = tree.getroot()
+        if case is None:
+                print "No Root Found"
+        
+        Title = ET.Element('Title')
+        id= tree.find('.//Act/Title').attrib['id'] + "-" +section
+        Title.text = section
+        Title.set("id",id)
+        if tree.find('.//SecRef') is None:
+                SecRef = ET.Element('SecRef')
+                SecRef.append(Title)
+                tree.find('.//Para').append(SecRef)
+        else:
+                tree.find('.//SecRef').append(Title)
+
+        return tree
+        
+def addJudgmentGroup(tree, section_starts_at, lines):
+        
+        judgment_group_title  = [x for x in re.search(r'(judgment)?(order)?(p.c.)?',lines[index],re.I).groups() if x is not None][0]
+        case = tree.getroot()
+        if case is None:
+                print "No Root Found"
+        
+        JudgmentGroup = ET.Element('JudgmentGroup')
+        JudgmentGroup.set('Title',judgment_group_title)
+        
+
+        Para = ET.Element('Para')
+
+        #section_text_content=''
+        i=section_starts_at
+        section_set = set()
+        section_list=[]
+        while i < len(lines):
+                act_match = re.search(r'(Act,)',lines[i])
+                section_match = re.search(r'(Section[s]?)',lines[i])
+
+                if act_match is not None:
+                        act_line = lines[i-1]+lines[i]+lines[i+1]
+                        #print act_line
+                        act_match_iter = re.finditer(r'([A-Z][a-z]+\s+[&]?\s?(and)?\s?){1,}(Act,)\s+\d{4}',act_line)
+                        for full_act_match in list(act_match_iter):
+                                if full_act_match is not None:
+                                        Para.append(getActElement(full_act_match.group(0)))
+                if section_match is not None:
+                        section_line = lines[i-1]+lines[i]+lines[i+1]
+                        section_matches = re.findall(r'Section\s+\d+\s+[()\d\s]{0,}',section_line)
+                        for section_match in section_matches:
+                                sum=0
+                                for c in section_match:
+                                        if c is '(' or c is ')':
+                                                sum += 1
+                                        
+                                if sum == 1 or sum == 3:
+                                        print section_line[section_line.find(section_match):section_line.find(section_match)+len(section_match)+3].split(" ",1)[1].replace(" ","").replace(",","")
+                                        section_list.append(section_line[section_line.find(section_match):section_line.find(section_match)+len(section_match)+3].split(" ",1)[1].replace(" ","").replace(",",""))
+                                        
+                                else:
+                                        print section_match.split(" ",1)[1].replace(" ","").replace(",","")
+                                        section_list.append(section_match.split(" ",1)[1].replace(" ","").replace(",",""))
+                        #sections_matches = re.findall(r'Sections\s+\d+\s+[()\d\s]{0,}',section_line)
+                        #print section_line + "\n"
+                        
+                i+=1
+
+        section_set.update(section_list)
+        #for section in section_set:
                 
+        print section_set
+
+        #print section_text_content
+        JudgmentGroup.append(Para)
+        case.append(JudgmentGroup)
+        tree._setroot(case)
+        for section in section_set:
+                if section is not "":
+                        tree = addSecRef(tree,section)
+                        
+                
+        return tree
+        
+        
 for arg in sys.argv[1:]:
         lines = []
         parse_pdf(arg)
@@ -379,6 +480,8 @@ for arg in sys.argv[1:]:
                 elif coram_found==1 and index == (coram_found_at + 2):
                         date = parse(line.split(":")[1])
                         case = addDate(case, calendar.month_name[date.month],date.day,date.year,"Pronounced")
+                if coram_found==1 and index == (coram_found_at + 3):
+                        XMLTree = addJudgmentGroup(XMLTree, index, lines)
                         
                 
         #ET.dump(case)
