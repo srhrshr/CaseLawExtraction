@@ -10,7 +10,9 @@ $ pip install pdfminer
 $ pip install python-dateutil
 $ pip install inflect
 ```
-The program is a single file named ```pdf_parser.py``` which can be run from CMD prompt:
+
+### Run
+The program is a single file named ```pdf_parser.py``` which can be run as follows:
 ```sh
 $ python pdf_parser.py filename.pdf filename1.pdf ..
 ```
